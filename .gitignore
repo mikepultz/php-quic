@@ -53,3 +53,12 @@ bench/
 # internal planning docs (not shipped)
 PLAN.md
 TODO.md
+
+# demo certs for the examples (user-generated, never shipped)
+examples/*.crt
+examples/*.key
+examples/*.csr
+examples/*.srl
+
+# local agent state
+.claude/
