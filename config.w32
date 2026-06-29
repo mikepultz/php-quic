@@ -1,0 +1,31 @@
+// Copyright (c) 2026 Mike Pultz. Licensed under BSD-3-Clause.
+//
+// config.w32 for the quic extension (OpenSSL 3.5+ native QUIC).
+
+ARG_WITH("quic", "QUIC support (OpenSSL 3.5+ native QUIC stack)", "no");
+
+if (PHP_QUIC != "no") {
+    if (CHECK_LIB("libssl.lib;ssleay32.lib", "quic", PHP_QUIC) &&
+        CHECK_LIB("libcrypto.lib;libeay32.lib", "quic", PHP_QUIC) &&
+        CHECK_HEADER_ADD_INCLUDE("openssl/quic.h", "CFLAGS_QUIC")) {
+
+        // the C sources live under src/. quic.c is the primary translation
+        // unit; ADD_SOURCES on the src/ directory adds the rest and makes the
+        // build create the src/ object subdirectory.
+        EXTENSION("quic", "src/quic.c");
+
+        ADD_SOURCES(configure_module_dirname + "/src",
+            "quic_connection.c quic_listener.c quic_stream.c " +
+            "quic_exception.c quic_util.c quic_poll.c", "quic");
+
+        ADD_FLAG("CFLAGS_QUIC", " /I " + configure_module_dirname + "/src ");
+        ADD_FLAG("CFLAGS_QUIC", " /D ZEND_ENABLE_STATIC_TSRMLS_CACHE=1 ");
+
+        // OpenSSL on Windows uses the system certificate store (crypt32) and
+        // our socket code uses winsock (ws2_32).
+        ADD_FLAG("LIBS_QUIC", "crypt32.lib ws2_32.lib");
+
+    } else {
+        WARNING("quic not enabled; libssl/libcrypto or openssl/quic.h not found");
+    }
+}

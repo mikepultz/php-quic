@@ -1,0 +1,55 @@
+# build artifacts
+*.o
+*.lo
+*.la
+*.dep
+.libs/
+modules/
+build/
+autom4te.cache/
+.deps
+Makefile
+Makefile.fragments
+Makefile.global
+Makefile.objects
+config.h
+config.h.in
+config.log
+config.status
+config.nice
+configure
+configure.ac
+libtool
+run-tests.php
+*.loT
+acinclude.m4
+aclocal.m4
+conftest*
+mkinstalldirs
+install-sh
+missing
+ltmain.sh
+
+# phpt test side-effects
+tests/*.diff
+tests/*.out
+tests/*.exp
+tests/*.log
+tests/*.sh
+tests/*.mem
+tests/*.php
+tests/*.crt
+tests/*.key
+
+# editors
+*.swp
+*~
+.idea/
+.vscode/
+
+# local benchmark/soak harness (not shipped)
+bench/
+
+# internal planning docs (not shipped)
+PLAN.md
+TODO.md

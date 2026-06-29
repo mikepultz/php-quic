@@ -1,0 +1,150 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  # ------------------------------------------------------------------
+  # Linux: official PHP containers (Debian trixie => OpenSSL 3.5).
+  # The extension links the same OpenSSL the PHP runtime uses, which is
+  # required: mixing two OpenSSL majors in one process is unsafe.
+  # ------------------------------------------------------------------
+  linux:
+    name: linux / php-${{ matrix.php }}
+    runs-on: ubuntu-latest
+    container: php:${{ matrix.php }}-cli
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.4', '8.5']
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install build dependencies
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            build-essential autoconf pkg-config libssl-dev
+
+      - name: Verify OpenSSL >= 3.5
+        run: |
+          pkg-config --modversion libssl
+          pkg-config --atleast-version=3.5.0 libssl || {
+            echo "::error::OpenSSL 3.5+ required (got $(pkg-config --modversion libssl))"; exit 1; }
+
+      - name: Build
+        run: |
+          phpize
+          ./configure --with-quic
+          make -j"$(nproc)"
+
+      - name: Test
+        env:
+          NO_INTERACTION: '1'
+          REPORT_EXIT_STATUS: '1'
+        run: make test TESTS=tests/
+
+      - name: Show failure diffs
+        if: failure()
+        run: for f in tests/*.diff; do [ -f "$f" ] && { echo "== $f =="; cat "$f"; }; done
+
+  # ------------------------------------------------------------------
+  # Static analysis: cppcheck and GCC's -fanalyzer, both as hard gates
+  # (-Werror), in the same Debian trixie / OpenSSL 3.5 container as Linux.
+  # ------------------------------------------------------------------
+  static-analysis:
+    name: static analysis (cppcheck + gcc -fanalyzer)
+    runs-on: ubuntu-latest
+    container: php:8.5-cli
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install tools
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            build-essential autoconf pkg-config libssl-dev cppcheck
+
+      - name: cppcheck
+        run: |
+          cppcheck --std=c11 --quiet --error-exitcode=1 --inline-suppr \
+            --enable=warning,performance,portability \
+            --suppress=missingIncludeSystem --suppress=missingInclude \
+            --suppress=preprocessorErrorDirective \
+            $(php-config --includes) -I src -I . src/*.c
+
+      - name: gcc -fanalyzer (warnings as errors)
+        run: |
+          phpize
+          ./configure --with-quic
+          make CFLAGS='-fanalyzer -g -O2 -Wall -Wextra -Wno-unused-parameter -Werror'
+
+  # ------------------------------------------------------------------
+  # macOS: Homebrew PHP + openssl@3 are both 3.5.x and consistent.
+  # ------------------------------------------------------------------
+  macos:
+    name: macos / php-${{ matrix.php }}
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.4', '8.5']
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: openssl
+          tools: none
+
+      - name: Build
+        run: |
+          OPENSSL_PREFIX="$(brew --prefix openssl@3)"
+          pkg-config --modversion libssl 2>/dev/null || true
+          export PKG_CONFIG_PATH="$OPENSSL_PREFIX/lib/pkgconfig:$PKG_CONFIG_PATH"
+          phpize
+          ./configure --with-quic
+          make -j"$(sysctl -n hw.ncpu)"
+
+      - name: Test
+        env:
+          NO_INTERACTION: '1'
+          REPORT_EXIT_STATUS: '1'
+        run: make test TESTS=tests/
+
+      - name: Show failure diffs
+        if: failure()
+        run: for f in tests/*.diff; do [ -f "$f" ] && { echo "== $f =="; cat "$f"; }; done
+
+  # ------------------------------------------------------------------
+  # Windows: the official php/php-windows-builder builds the extension
+  # against the PHP build's dependency pack, which includes the OpenSSL it
+  # links. Only PHP 8.5 is tested: the 8.4 Windows dep pack ships OpenSSL
+  # 3.0.20 (no openssl/quic.h, native QUIC arrived in 3.2/3.5), so the
+  # extension cannot build there; 8.5 ships OpenSSL 3.5+. On Linux/macOS the
+  # extension links the system OpenSSL 3.5+, so both PHP versions are tested.
+  # The fork-based functional tests skip on Windows (no pcntl).
+  # ------------------------------------------------------------------
+  windows:
+    name: windows / php-${{ matrix.php }} ${{ matrix.ts }}
+    runs-on: windows-2022
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.5']
+        arch: ['x64']
+        ts: ['nts']
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Build and test
+        uses: php/php-windows-builder/extension@v1
+        with:
+          php-version: ${{ matrix.php }}
+          arch: ${{ matrix.arch }}
+          ts: ${{ matrix.ts }}
+          libs: openssl
+          args: --with-quic

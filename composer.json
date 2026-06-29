@@ -1,0 +1,29 @@
+{
+    "name": "mikepultz/php-quic",
+    "description": "Raw QUIC transport for PHP (client + server, streams, DoQ), built on OpenSSL 3.5+ native QUIC.",
+    "type": "php-ext",
+    "license": "BSD-3-Clause",
+    "keywords": ["quic", "http3", "doq", "dns-over-quic", "openssl", "extension"],
+    "authors": [
+        {
+            "name": "Mike Pultz",
+            "email": "mike@mikepultz.com"
+        }
+    ],
+    "require": {
+        "php": ">=8.4"
+    },
+    "php-ext": {
+        "extension-name": "quic",
+        "priority": 80,
+        "support-zts": true,
+        "support-nts": true,
+        "configure-options": [
+            {
+                "name": "with-quic",
+                "description": "Path to an OpenSSL >= 3.5 prefix (optional; pkg-config is used by default)",
+                "needs-value": true
+            }
+        ]
+    }
+}
